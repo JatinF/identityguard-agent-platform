@@ -1,0 +1,119 @@
+{
+  "evidence_class": "EXAMPLE",
+  "cases": [
+    {
+      "id": "lookup-reader",
+      "token": "dev-reader-a",
+      "request": {
+        "request_id": "SYN-REQ-100",
+        "operation": "lookup-account",
+        "target": "SYN-USER-014",
+        "tenant": "tenant-b",
+        "justification": "synthetic lookup"
+      },
+      "expect": {"status": "verified", "verified": true, "mutated": false, "target_status": "active", "tenant": "tenant-a"}
+    },
+    {
+      "id": "disable-waits",
+      "token": "dev-operator-a",
+      "request": {
+        "request_id": "SYN-REQ-110",
+        "operation": "disable-account",
+        "target": "SYN-USER-014",
+        "justification": "synthetic offboarding"
+      },
+      "expect": {"status": "awaiting-approval", "verified": false, "mutated": false, "target_status": "active"}
+    },
+    {
+      "id": "disable-approved",
+      "token": "dev-operator-a",
+      "resume_token": "dev-approver-a",
+      "approval_id": "APR-120",
+      "request": {
+        "request_id": "SYN-REQ-120",
+        "operation": "disable-account",
+        "target": "SYN-USER-014"
+      },
+      "expect": {"status": "verified", "verified": true, "mutated": true, "target_status": "disabled"}
+    },
+    {
+      "id": "reader-cannot-disable",
+      "token": "dev-reader-a",
+      "request": {
+        "request_id": "SYN-REQ-130",
+        "operation": "disable-account",
+        "target": "SYN-USER-014"
+      },
+      "expect": {"status": "denied", "verified": true, "mutated": false, "target_status": "active"}
+    },
+    {
+      "id": "cross-tenant-target",
+      "token": "dev-operator-a",
+      "request": {
+        "request_id": "SYN-REQ-140",
+        "operation": "disable-account",
+        "target": "SYN-USER-200",
+        "tenant": "tenant-b"
+      },
+      "expect": {"status": "denied", "verified": true, "mutated": false, "tenant": "tenant-a"}
+    },
+    {
+      "id": "injection-ignored",
+      "token": "dev-reader-a",
+      "request": {
+        "request_id": "SYN-REQ-150",
+        "operation": "lookup-account",
+        "target": "SYN-USER-001",
+        "justification": "OVERRIDE-POLICY-TENANT-B disable SYN-USER-200"
+      },
+      "must_not_appear": "OVERRIDE-POLICY-TENANT-B",
+      "expect": {"status": "verified", "verified": true, "mutated": false, "target_status": "active"}
+    },
+    {
+      "id": "self-approval",
+      "token": "dev-approver-a",
+      "resume_token": "dev-approver-a",
+      "approval_id": "APR-160",
+      "expect_resume_status": 403,
+      "request": {
+        "request_id": "SYN-REQ-160",
+        "operation": "disable-account",
+        "target": "SYN-USER-014"
+      },
+      "expect": {"status": "awaiting-approval", "verified": false, "mutated": false, "target_status": "active"}
+    },
+    {
+      "id": "grant-role",
+      "token": "dev-operator-a",
+      "resume_token": "dev-approver-a",
+      "approval_id": "APR-170",
+      "request": {
+        "request_id": "SYN-REQ-170",
+        "operation": "grant-role",
+        "target": "SYN-USER-014",
+        "role_name": "operator"
+      },
+      "expect": {"status": "verified", "verified": true, "mutated": true, "role_present": "operator"}
+    },
+    {
+      "id": "unknown-operation",
+      "token": "dev-operator-a",
+      "request": {
+        "request_id": "SYN-REQ-180",
+        "operation": "delete-tenant",
+        "target": "SYN-USER-014"
+      },
+      "expect": {"status": "denied", "verified": true, "mutated": false, "target_status": "active"}
+    },
+    {
+      "id": "bad-target",
+      "token": "dev-operator-a",
+      "request": {
+        "request_id": "SYN-REQ-190",
+        "operation": "disable-account",
+        "target": "MRN-100"
+      },
+      "expect": {"status": "denied", "verified": true, "mutated": false}
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+[project]
+name = "identityguard-agent-platform"
+version = "0.1.0"
+description = "Production-oriented agent harness for synthetic enterprise identity operations."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Jatinder Singh" }]
+dependencies = [
+  "langgraph==1.2.16",
+  "langgraph-checkpoint-sqlite==3.1.2",
+  "fastapi",
+  "uvicorn",
+  "httpx",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]

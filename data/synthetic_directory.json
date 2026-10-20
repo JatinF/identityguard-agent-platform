@@ -1,0 +1,9 @@
+{
+  "evidence_class": "EXAMPLE",
+  "real_accounts": 0,
+  "accounts": [
+    {"tenant": "tenant-a", "id": "SYN-USER-001", "status": "active", "roles": ["reader"]},
+    {"tenant": "tenant-a", "id": "SYN-USER-014", "status": "active", "roles": ["reader"]},
+    {"tenant": "tenant-b", "id": "SYN-USER-200", "status": "active", "roles": ["reader"]}
+  ]
+}
