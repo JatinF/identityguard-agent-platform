@@ -1,8 +1,10 @@
 """PostgreSQL store with row-level security.
 
 The application sets identityguard.tenant inside the transaction. Policies are
-forced, including for the table owner, so a query without that setting does
-not see another tenant's rows. This module is used when DATABASE_URL is set.
+forced for the table owner. A superuser still bypasses row-level security, and
+the Docker database user is a superuser, so data statements switch to
+identityguard_app with SET LOCAL ROLE. This module is used when DATABASE_URL
+is set.
 """
 
 from __future__ import annotations
@@ -66,6 +68,20 @@ class PostgresStore:
             self._ensure_policy(conn, "identities_tenant", "CREATE POLICY identities_tenant ON identities USING (tenant_id = current_setting('identityguard.tenant', true)) WITH CHECK (tenant_id = current_setting('identityguard.tenant', true))")
             self._ensure_policy(conn, "evidence_tenant", "CREATE POLICY evidence_tenant ON evidence USING (tenant_id = current_setting('identityguard.tenant', true)) WITH CHECK (tenant_id = current_setting('identityguard.tenant', true))")
             self._ensure_policy(conn, "evidence_embeddings_tenant", PGVECTOR_POLICY)
+            conn.execute(
+                """
+                DO $$
+                BEGIN
+                  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'identityguard_app') THEN
+                    CREATE ROLE identityguard_app NOLOGIN NOSUPERUSER NOBYPASSRLS;
+                  END IF;
+                END $$;
+                """
+            )
+            conn.execute("GRANT USAGE ON SCHEMA public TO identityguard_app")
+            conn.execute(
+                "GRANT SELECT, INSERT, UPDATE, DELETE ON identities, evidence, evidence_embeddings TO identityguard_app"
+            )
             conn.commit()
 
     def _ensure_policy(self, conn, name: str, statement: str) -> None:
@@ -76,7 +92,7 @@ class PostgresStore:
     def seed_if_empty(self) -> None:
         identities, events = load_fixtures()
         with self.connect() as conn:
-            # Seed as a bypass by inserting through a session setting per row.
+            self._assume_app_role(conn)
             for row in identities:
                 self._set_tenant(conn, row["tenant_id"])
                 conn.execute(
@@ -104,15 +120,21 @@ class PostgresStore:
 
     def visible_identity_ids(self, tenant_id: str) -> list[str]:
         with self.connect() as conn:
+            self._assume_app_role(conn)
             self._set_tenant(conn, tenant_id)
             rows = conn.execute("SELECT identity_id FROM identities ORDER BY identity_id").fetchall()
             return [row["identity_id"] for row in rows]
 
     def visible_without_tenant(self) -> list[str]:
         with self.connect() as conn:
+            self._assume_app_role(conn)
             conn.execute("SELECT set_config('identityguard.tenant', '', true)")
             rows = conn.execute("SELECT identity_id FROM identities").fetchall()
             return [row["identity_id"] for row in rows]
+
+    @staticmethod
+    def _assume_app_role(conn) -> None:
+        conn.execute("SET LOCAL ROLE identityguard_app")
 
     @staticmethod
     def _set_tenant(conn, tenant_id: str) -> None:

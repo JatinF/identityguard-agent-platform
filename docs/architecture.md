@@ -24,7 +24,7 @@ The running path is local:
 
 ## Stores
 
-Pytest and the API use SQLite for workflow rows and a SQLite LangGraph checkpoint. That is enough to kill the process and resume without a second suspend. PostgreSQL with pgvector is the row-level security demonstration. `PostgresStore` sets `identityguard.tenant` and forces policies on identities, evidence, and embeddings. The API process does not move its run store onto PostgreSQL.
+Pytest and the API use SQLite for workflow rows and a SQLite LangGraph checkpoint. That is enough to kill the process and resume without a second suspend. PostgreSQL with pgvector is the row-level security demonstration. `PostgresStore` sets `identityguard.tenant` and forces policies on identities, evidence, and embeddings. The database user created by Docker is a superuser, and a superuser bypasses row-level security, so data statements use `SET LOCAL ROLE identityguard_app`. The API process does not move its run store onto PostgreSQL.
 
 The embedding function is a deterministic 8-float hash. It is not a hosted embedding model.
 
