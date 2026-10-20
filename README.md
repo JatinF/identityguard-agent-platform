@@ -30,9 +30,9 @@ An operator calls FastAPI with a bearer token. The token supplies the tenant and
 flowchart TD
   client["Operator with a bearer token"] --> api["FastAPI /v1"]
   api --> principal["Tenant and role copied from the token"]
-  principal --> graph["LangGraph investigation"]
-  graph --> evidence["Evidence scoped to that tenant"]
-  graph --> model["Structured recommendation"]
+  principal --> investigation["LangGraph investigation"]
+  investigation --> evidence["Evidence scoped to that tenant"]
+  investigation --> model["Structured recommendation"]
   model --> policy["Policy outside the model"]
   policy --> pause["AWAITING_APPROVAL"]
   pause --> human["Different approver, same tenant"]
