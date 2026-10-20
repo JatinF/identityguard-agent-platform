@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Test
+        run: python -m pytest
+
+  postgres:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: identityguard
+          POSTGRES_PASSWORD: local-demo-only
+          POSTGRES_DB: identityguard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U identityguard -d identityguard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Row-level security
+        env:
+          DATABASE_URL: postgresql://identityguard:local-demo-only@localhost:5432/identityguard
+        run: python -m pytest tests/test_tenant_isolation.py

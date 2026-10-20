@@ -1,0 +1,62 @@
+{
+  "Comment": "Unexecuted skeleton for account 000000000000. This state machine has not been deployed.",
+  "StartAt": "RetrieveEvidence",
+  "States": {
+    "RetrieveEvidence": {
+      "Type": "Pass",
+      "Next": "Authorize"
+    },
+    "Authorize": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.policy",
+          "StringEquals": "needs_approval",
+          "Next": "WaitForApproval"
+        }
+      ],
+      "Default": "Close"
+    },
+    "WaitForApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "TimeoutSeconds": 3600,
+      "Parameters": {
+        "FunctionName": "identityguard-approval-placeholder",
+        "Payload": {
+          "taskToken.$": "$$.Task.Token",
+          "approvalId.$": "$.approval_id"
+        }
+      },
+      "Next": "Reauthorize",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "Close"
+        }
+      ]
+    },
+    "Reauthorize": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.reauthorize",
+          "StringEquals": "ALLOW",
+          "Next": "Execute"
+        }
+      ],
+      "Default": "Close"
+    },
+    "Execute": {
+      "Type": "Pass",
+      "Next": "Verify"
+    },
+    "Verify": {
+      "Type": "Pass",
+      "Next": "Close"
+    },
+    "Close": {
+      "Type": "Succeed"
+    }
+  }
+}

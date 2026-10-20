@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RunPlaceholderStateMachine",
+      "Effect": "Allow",
+      "Action": [
+        "states:StartExecution",
+        "states:DescribeExecution"
+      ],
+      "Resource": "arn:aws:states:us-east-1:000000000000:stateMachine:identityguard-investigation"
+    }
+  ]
+}

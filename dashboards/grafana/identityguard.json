@@ -1,0 +1,18 @@
+{
+  "title": "IdentityGuard local process",
+  "description": "Panel names match the in-process registry. This dashboard does not contain a production time series.",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "title": "Runs",
+      "type": "stat",
+      "targets": [{ "expr": "identityguard_runs_total" }]
+    },
+    {
+      "title": "Approval decisions",
+      "type": "stat",
+      "targets": [{ "expr": "identityguard_approval_decisions_total" }]
+    }
+  ]
+}

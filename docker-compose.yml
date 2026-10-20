@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: identityguard
+      POSTGRES_PASSWORD: local-demo-only
+      POSTGRES_DB: identityguard
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identityguard -d identityguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: .
+    environment:
+      MODEL_PROVIDER: mock
+      IG_STATE_DIR: /data
+      IG_DATA_DIR: /app/datasets
+      DATABASE_URL: postgresql://identityguard:local-demo-only@postgres:5432/identityguard
+    ports:
+      - "8000:8000"
+    volumes:
+      - ig-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  ig-data:

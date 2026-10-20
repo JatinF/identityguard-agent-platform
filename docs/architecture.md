@@ -1,71 +1,37 @@
 # Architecture
 
-One identity operation moves through a LangGraph thread. The same decisions are described, and not executed, as an AWS Step Functions state machine.
+A security operator asks the agent to investigate a suspicious login for the synthetic employee Alex Rivera, decide whether the account should be suspended, and request approval before any write.
 
-```mermaid
-flowchart LR
-  request[Synthetic request]
-  policy[Policy gate]
-  pause[Approval interrupt]
-  tool[Directory tool]
-  verify[Postcondition]
-  memory[Tenant memory and audit]
+The running path is local:
 
-  request --> policy
-  policy -->|allow| tool
-  policy -->|needs approval| pause
-  policy -->|deny| memory
-  pause --> policy
-  tool --> verify --> memory
-```
+1. FastAPI authenticates a bearer token and copies tenant and role from that token. A tenant field on the body is ignored.
+2. The LangGraph investigation loads tenant-scoped evidence, asks the model for a structured recommendation, and checks policy in process.
+3. A high-risk recommendation pauses in `AWAITING_APPROVAL`. The approval row stores the requester, the exact argument fingerprint, the expiry, and later the approver and the decision.
+4. Resume or a decision loads the checkpoint and calls `reauthorize` again. Expiry, rejection, self-approval, and a fingerprint mismatch stop the graph before the tool.
+5. After a suspend call, the harness rereads the account. Completion is claimed only when the reread shows `suspended`.
 
-## Request
+## Modules
 
-`Harness.start` builds the graph input from the principal. The body can carry `request_id`, `operation`, `target`, `role_name`, and a `justification`. The justification is not copied into graph state, memory, or the audit log. A `tenant` field on the body is ignored. Credential-shaped keys are rejected before `invoke`.
-
-Request ids start with `SYN-REQ-`. User ids start with `SYN-USER-`. The export target is the literal `SYN-AUDIT`.
-
-## Policy
-
-`evaluate` reads the operation field. The map is fixed:
-
-| Operation | Risk | Who may request it |
+| Module | Path | What the demo actually does |
 | --- | --- | --- |
-| `lookup-account` | low | reader, operator, approver |
-| `disable-account` | high | operator, approver |
-| `grant-role` | high | operator, approver |
-| `export-audit` | high | operator, approver |
+| Durable harness | `src/identityguard/harness/` | Plan, tool choice, checkpoint, context compaction, retry, idempotency |
+| Identity and policy | `src/identityguard/identity/` | Mock directory, server-side authorization, suspend, provision, verification |
+| Approval | approval node and `/v1/approvals/{id}/decision` | Persist and re-check the human decision |
+| Evidence and memory | `src/identityguard/storage/` | SQLite for runs. PostgreSQL with forced row-level security when `DATABASE_URL` is set |
+| Verified action | `src/identityguard/identity/verification.py` | Independent reread. `UNVERIFIED` does not complete |
+| Evaluation | `src/identityguard/evaluations/` | Synthetic cases, replay, model-safety gate |
+| Telemetry | `src/identityguard/telemetry/` | In-process traces and Prometheus counters |
 
-A low-risk call that passes the checks returns `allow` and names the tool. A high-risk call with no approval returns `needs-approval` and names no tool. A high-risk call with an approval is allowed only when the approval id starts with `APR-`, the tenant and request id match, the approver role is `approver`, and the approver is a different actor. Anything else is `deny`.
+## Stores
 
-An unknown user id in this tenant and a user id that exists only in another tenant produce the same reason, `unknown target`.
+Pytest and the API use SQLite for workflow rows and a SQLite LangGraph checkpoint. That is enough to kill the process and resume without a second suspend. PostgreSQL with pgvector is the row-level security demonstration. `PostgresStore` sets `identityguard.tenant` and forces policies on identities, evidence, and embeddings. The API process does not move its run store onto PostgreSQL.
 
-## Graph
+The embedding function is a deterministic 8-float hash. It is not a hosted embedding model.
 
-Nodes, in order: intake, policy, and then one of approval, execute, or close. Approval interrupts. Resume runs recheck, which calls `evaluate` again. Execute calls `evaluate` a further time and only then calls `Directory.apply`. Verify compares the directory with the tool result. Close writes one memory record and one audit line.
+## Models
 
-The checkpointer is `SqliteSaver`. The thread id is the request id. `recovery_check` closes the database after the interrupt and opens a new harness on the same file. The resumed thread disables the account once.
+`MODEL_PROVIDER=mock` is the default. The mock cites only suspicious-login evidence that was retrieved for the subject. Hosted adapters exist for xAI (`XAI_API_KEY`, `https://api.x.ai/v1/chat/completions`, model `grok-4.7`), OpenAI, and Anthropic. They fail closed when the key is missing or the call times out. The Bedrock adapter does not invoke a model. Tests inject a transport and do not open a network connection.
 
-`force_tool_down` makes execute return `failed` without calling `apply`. The account stays active.
+## Workflow adapters
 
-## Directory and memory
-
-The directory is seeded from [`data/synthetic_directory.json`](../data/synthetic_directory.json). `apply` stores the result under the request id. A second call with that id returns the stored result and sets `idempotent_replay`.
-
-Memory is a dict of tenant, then key. `read` on another tenant returns `None`. Export copies audit rows whose tenant field matches the caller.
-
-## Step Functions document
-
-[`deploy/stepfunctions/identity-workflow.asl.json`](../deploy/stepfunctions/identity-workflow.asl.json) uses account `000000000000`. Policy, recheck, execute, and verify are tasks. Both choice states default to Close. WaitForApproval uses a task token and its failure and timeout paths go to Close, not to Execute. Catch paths on the tasks also go to Close.
-
-[`deploy/iam/tool-role.json`](../deploy/iam/tool-role.json) allows `states:StartExecution`, `states:DescribeExecution`, and `lambda:InvokeFunction` on the four placeholder function names. It does not grant `iam:*`, `secretsmanager:*`, or `Resource: *`.
-
-`identityguard.asl` walks that document in process. Nothing in the test suite creates a state machine.
-
-## Evaluation
-
-[`evals/cases.json`](../evals/cases.json) holds ten examples. `run_suite` gives each case a new directory and a new database. The committed table is [`evals/replay-report.md`](../evals/replay-report.md). A second run of the suite produces the same case id, pass bit, and status.
-
-## Observability
-
-`GET /metrics` publishes two process counters and says they are not cloud telemetry. The audit log is JSONL. Runbooks for a stuck approval and for rollback live in [`docs/runbooks`](runbooks).
+Step Functions, Bedrock AgentCore, the Codex SDK, ClickHouse, and BigQuery are documented slots. They are not called. OPA is not wired. The policy that runs is `identityguard.identity.authorization`.

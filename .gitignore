@@ -11,3 +11,4 @@ dist/
 .coverage
 htmlcov/
 benchmarks/aws-evidence.json
+var/

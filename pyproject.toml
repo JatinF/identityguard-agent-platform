@@ -1,9 +1,9 @@
 [project]
 name = "identityguard-agent-platform"
-version = "0.1.0"
-description = "Production-oriented agent harness for synthetic enterprise identity operations."
+version = "0.2.0"
+description = "Python/FastAPI agent harness with LangGraph, durable execution, tenant-isolated memory, policy-gated identity operations, human approvals, verified tool outcomes, and replayable LLM security evaluations."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Jatinder Singh" }]
 dependencies = [
@@ -12,10 +12,13 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "httpx",
+  "psycopg[binary]",
+  "prometheus-client",
+  "opentelemetry-sdk",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "hypothesis", "locust"]
 
 [build-system]
 requires = ["setuptools>=68"]

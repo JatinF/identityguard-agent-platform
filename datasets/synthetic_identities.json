@@ -1,0 +1,30 @@
+{
+  "evidence_class": "EXAMPLE",
+  "real_accounts": 0,
+  "identities": [
+    {
+      "tenant_id": "tenant-a",
+      "identity_id": "SYN-USER-ALEX",
+      "display_name": "Alex Rivera",
+      "email": "alex.rivera@example.invalid",
+      "status": "active",
+      "department": "synthetic-finance"
+    },
+    {
+      "tenant_id": "tenant-a",
+      "identity_id": "SYN-USER-SAM",
+      "display_name": "Sam Quinn",
+      "email": "sam.quinn@example.invalid",
+      "status": "active",
+      "department": "synthetic-finance"
+    },
+    {
+      "tenant_id": "tenant-b",
+      "identity_id": "SYN-USER-BLAKE",
+      "display_name": "Blake Chen",
+      "email": "blake.chen@example.invalid",
+      "status": "active",
+      "department": "synthetic-ops"
+    }
+  ]
+}

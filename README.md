@@ -1,25 +1,25 @@
 # IdentityGuard AI — Secure Enterprise Agent Harness & Evaluation Platform
 
-An open-source reference implementation of long-running, identity-aware AI agents that execute enterprise workflows safely, recover from interruptions, and verify outcomes.
+An open-source, production-oriented reference implementation for reliable, identity-aware digital workers.
 
-Production-oriented Python agent harness with LangGraph, AWS Step Functions, policy-gated tool execution, tenant-isolated memory, human approvals, replayable evaluations, and verified enterprise identity operations.
+Python/FastAPI agent harness with LangGraph, durable execution, tenant-isolated memory, policy-gated identity operations, human approvals, verified tool outcomes, and replayable LLM security evaluations.
 
-The executable slice is:
+A security operator asks the agent to investigate the suspicious login for synthetic employee Alex Rivera, decide whether the account should be suspended, and request approval before taking action. The agent retrieves fixture evidence, proposes a suspend, and stops in `AWAITING_APPROVAL`. A rejected approval, an expired approval, a failed policy check, or a reread that does not show `suspended` ends the workflow. Those endings do not claim completion.
 
-synthetic identity request → policy gate → approval interrupt → tool → postcondition check → tenant memory and audit.
+Accounts are fixtures. Identifiers look like `SYN-USER-ALEX`. The seed file declares `real_accounts: 0`. This package is not an identity provider.
 
-Accounts are fixtures. Identifiers look like `SYN-USER-014` and `SYN-REQ-100`. The seed file declares `real_accounts: 0`. The harness is not an identity provider.
-
-**Deployment decision: NO-GO.** Step Functions has not been executed, the dev tokens have not been replaced by a site identity provider, and no hosted model has been called. The report is [`acceptance/deployment-acceptance.md`](acceptance/deployment-acceptance.md).
+**Deployment decision: NO-GO.** Step Functions has not been executed, the dev tokens have not been replaced, and no hosted model has been called. The model-safety gate is separate: the mock baseline is `ALLOW`, and a candidate that misses more risks is `BLOCK`. Neither result authorizes a cloud deployment. See [docs/production-readiness.md](docs/production-readiness.md) and [benchmarks/benchmark_report.md](benchmarks/benchmark_report.md).
 
 | | |
 | --- | --- |
-| Package | `identityguard` |
+| Package | `identityguard` 0.2.0 |
+| API | FastAPI, tenant taken from the bearer token |
 | Graph | LangGraph 1.2.16, SQLite checkpoint |
-| Tools | lookup, disable, grant-role, export-audit |
-| Approval | A different approver in the same tenant, interrupt and resume |
-| Evaluation | 10 golden cases, replayed from [`evals/cases.json`](evals/cases.json) |
-| AWS | State machine and IAM documents for account `000000000000` |
+| Directory | Mock provider, two synthetic tenants |
+| Approval | Different approver, persisted arguments, expiry, reauthorize on resume |
+| Verification | Reread after the tool. `UNVERIFIED` does not complete |
+| Evaluation | Golden cases, injection cases, replay, release gate |
+| PostgreSQL | Row-level security demonstration when `DATABASE_URL` is set |
 | Decision | NO-GO until measured external evidence exists |
 
 ## How this sits with the other references
@@ -27,7 +27,7 @@ Accounts are fixtures. Identifiers look like `SYN-USER-014` and `SYN-REQ-100`. T
 | | [H100 GPU factory](https://github.com/JatinF/h100-ai-factory-reference-architecture) | [Healthcare AI factory](https://github.com/JatinF/healthcare-ai-factory-platform) | This repository |
 | --- | --- | --- | --- |
 | Focus | GPU infrastructure acceptance | Imaging and private clinical inference | Identity-aware agent control |
-| Outcome | Design and gates for the cluster | Synthetic imaging service path | Synthetic identity workflow with a durable pause |
+| Outcome | Design and gates for the cluster | Synthetic imaging service path | Synthetic investigation with a durable pause |
 
 Each repository stands on its own evidence. A green replay here does not measure a GPU and does not clear the healthcare acceptance report.
 
@@ -35,32 +35,35 @@ Each repository stands on its own evidence. A green replay here does not measure
 
 | Tag | Meaning in this repo |
 | --- | --- |
-| `EXAMPLE` | Synthetic directory and the golden cases |
-| `GATE` | Step Functions execution, identity-provider binding, hosted-model trace |
-| `MEASURED` | A row in `benchmarks/aws-evidence.json` with an execution identifier and a log |
+| `EXAMPLE` | Synthetic directory, golden cases, and local-replay latency |
+| `ASSUMPTION` | 0.002 USD per 1,000 tokens, dated 2026-10-19, not an invoice |
+| `DERIVED` | A cost computed from fixture token counts and that assumption |
+| `GATE` | Model-safety `ALLOW` or `BLOCK`, and the external gates that are `not-run` |
+| `MEASURED` | A row in `benchmarks/aws-evidence.json`. That file is absent |
 
-The local replay is not a `MEASURED` row. Schema: [`benchmarks/README.md`](benchmarks/README.md).
+## Run the demo
 
-## Run the software slice
-
-Python 3.11 or newer.
+Python 3.12 or newer.
 
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest
+uvicorn identityguard.api.main:app
 ```
 
-Pytest runs the policy gate, the LangGraph pause and resume, a reopened SQLite checkpoint, tenant isolation, the API, the state-machine checker, and a comparison of the committed reports with the generators. The job in [`.github/workflows/check.yml`](.github/workflows/check.yml) does the same on Ubuntu 24.04 with Python 3.12. That job does not call AWS and does not call a model API.
+Pytest uses the mock model and SQLite. It does not call AWS and it does not call a model API. The workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs that suite on Ubuntu 24.04 with Python 3.12, then runs the row-level security test against `pgvector/pgvector:pg16`.
 
-Regenerate the two committed views after a generator change, then re-run pytest:
+Docker Compose starts the API and a local Postgres. The API run store stays on SQLite under `IG_STATE_DIR`. Postgres is there for the row-level security demonstration. This repository's tests were not executed through Compose.
 
 ```bash
-python -c "from pathlib import Path; from identityguard.evals import render_eval, run_suite; from identityguard.acceptance_report import build_report, render_markdown; Path('acceptance').mkdir(exist_ok=True); Path('evals/replay-report.md').write_text(render_eval(run_suite()), encoding='utf-8'); Path('acceptance/deployment-acceptance.md').write_text(render_markdown(build_report(True)), encoding='utf-8')"
+docker compose up --build
 ```
+
+Copy [.env.example](.env.example) only if you want local overrides. Leave hosted API keys unset.
 
 ## API
 
-The default token map is a fixture. A deployment replaces it with the site identity provider.
+Dev tokens are fixtures. A deployment replaces the map.
 
 | Token | Tenant | Role |
 | --- | --- | --- |
@@ -73,32 +76,35 @@ The default token map is a fixture. A deployment replaces it with the site ident
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/healthz` | Process up, `real_accounts` 0 |
-| GET | `/metrics` | Local process counters |
-| POST | `/v1/runs` | Start a run. Tenant and role come from the token |
-| POST | `/v1/runs/{request_id}/resume` | Approver submits an `APR-` id. The body cannot name the approver |
-| GET | `/v1/runs/{request_id}` | Owning tenant only. Another tenant receives 404 |
+| GET | `/metrics` | In-process Prometheus counters |
+| POST | `/v1/agents/runs` | Start an investigation. Send `Idempotency-Key` |
+| GET | `/v1/agents/runs/{id}` | Owning tenant only. Another tenant receives 404 |
+| POST | `/v1/agents/runs/{id}/resume` | Continue a checkpoint. Pending approvals stay pending |
+| POST | `/v1/approvals/{id}/decision` | `approved` or `rejected` by a different approver |
+| GET | `/v1/identities/{id}` | Read one identity in the caller's tenant |
+| GET | `/v1/evaluations/report` | Deterministic metrics, model comparison, and the NO-GO decision |
 
-A missing token returns 401. A body field named `password`, `secret`, `api_key`, `ssn`, or `private_key` returns 422 and the value is not written to the audit log. Policy denials return 200 with `status: denied` and leave the directory unchanged.
+A missing token returns 401. A body field named `password`, `secret`, `api_key`, `ssn`, or `private_key` returns 400 and the value is not written to the audit log. Policy denials return 200 with `status: DENIED` and leave the account unchanged.
 
-## What each control is
+Alex's investigation, from tenant A:
 
-| Capability | Where it lives |
-| --- | --- |
-| Policy-gated tools | [`src/identityguard/policy.py`](src/identityguard/policy.py) |
-| Durable pause and resume | LangGraph interrupt plus SQLite, covered by `recovery_check` |
-| Tenant-isolated memory | [`src/identityguard/memory.py`](src/identityguard/memory.py) |
-| Human approval | Resume route and the self-approval deny |
-| Replayable evaluation | [`evals/replay-report.md`](evals/replay-report.md) |
-| Verified outcome | Postcondition check after the tool, containment check on deny |
-| Step Functions shape | [`deploy/stepfunctions/identity-workflow.asl.json`](deploy/stepfunctions/identity-workflow.asl.json) |
-| Least-privilege IAM document | [`deploy/iam/tool-role.json`](deploy/iam/tool-role.json) |
-| Threat model, SLOs, runbooks | [`docs`](docs) |
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/agents/runs \
+  -H "Authorization: Bearer dev-operator-a" \
+  -H "Idempotency-Key: alex-1" \
+  -H "Content-Type: application/json" \
+  -d "{\"subject_id\":\"SYN-USER-ALEX\",\"goal\":\"Investigate the suspicious login for employee Alex Rivera, determine whether the account should be suspended, and request approval before taking action.\"}"
+```
 
-The path is drawn in [`docs/architecture.md`](docs/architecture.md).
+## Layout
+
+The harness, identity tools, model adapters, evaluation runner, stores, and telemetry live under `src/identityguard/`. Step Functions is an unexecuted skeleton in `integrations/aws-step-functions/`. Bedrock AgentCore and the Codex SDK are marked unwired. Terraform and Kubernetes manifests are unapplied.
+
+The path and the controls are written out in [docs/architecture.md](docs/architecture.md), [docs/threat-model.md](docs/threat-model.md), [docs/evaluation-methodology.md](docs/evaluation-methodology.md), and [docs/failure-recovery.md](docs/failure-recovery.md).
 
 ## Model slot
 
-The tool name comes from the operation field. A sentence in `justification` cannot select a different tool. This reference does not send identity attributes to a hosted model. If a site later adds one, the supported provider slot is xAI: environment variable `XAI_API_KEY`, base URL `https://api.x.ai/v1`, called only from the server side, and only after the same policy gate. That call is not implemented. The `hosted-model-run` gate stays `not-run`.
+xAI is the preferred hosted provider when a deployment chooses one: `XAI_API_KEY`, `https://api.x.ai/v1/chat/completions`, model `grok-4.7`. OpenAI and Anthropic adapters implement the same `analyze` contract for a comparison run. Bedrock invoke stays disabled. The default remains the mock, so identity attributes are not sent off the machine. The `hosted-model-run` gate stays `not-run`.
 
 ## License
 

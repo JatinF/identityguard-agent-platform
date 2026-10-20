@@ -1,0 +1,40 @@
+# Unapplied manifest. It is not installed in a cluster.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identityguard
+  labels:
+    app: identityguard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identityguard
+  template:
+    metadata:
+      labels:
+        app: identityguard
+    spec:
+      containers:
+        - name: api
+          image: identityguard:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MODEL_PROVIDER
+              value: mock
+            - name: IG_STATE_DIR
+              value: /data
+            - name: IG_DATA_DIR
+              value: /app/datasets
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+          volumeMounts:
+            - name: state
+              mountPath: /data
+      volumes:
+        - name: state
+          emptyDir: {}
