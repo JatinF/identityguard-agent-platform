@@ -22,6 +22,55 @@ Accounts are fixtures. Identifiers look like `SYN-USER-ALEX`. The seed file decl
 | PostgreSQL | Row-level security demonstration when `DATABASE_URL` is set |
 | Decision | NO-GO until measured external evidence exists |
 
+## Architecture
+
+An operator calls FastAPI with a bearer token. The token supplies the tenant and the role. The investigation graph loads that tenant's evidence, asks the model for a structured recommendation, and then runs policy in process. A high-risk recommendation pauses until a different approver accepts the exact arguments. The suspend tool runs only after that check is repeated. Completion is claimed only when a fresh read of the account shows `suspended`.
+
+```mermaid
+flowchart TD
+  client["Operator with a bearer token"] --> api["FastAPI /v1"]
+  api --> principal["Tenant and role copied from the token"]
+  principal --> graph["LangGraph investigation"]
+  graph --> evidence["Evidence scoped to that tenant"]
+  graph --> model["Structured recommendation"]
+  model --> policy["Policy outside the model"]
+  policy --> pause["AWAITING_APPROVAL"]
+  pause --> human["Different approver, same tenant"]
+  human --> recheck["reauthorize on resume"]
+  recheck --> tool["suspend-account"]
+  tool --> reread["Reread the account"]
+  reread --> close["VERIFIED, or a stop with no completion claim"]
+```
+
+The graph has one terminal outcome. A stop leaves the account unchanged.
+
+```mermaid
+stateDiagram-v2
+  [*] --> RUNNING
+  RUNNING --> DENIED: policy denies the action
+  RUNNING --> NO_ACTION: no action proposed
+  RUNNING --> EVIDENCE_REJECTED: cited evidence is missing
+  RUNNING --> FAILED: model retries are exhausted
+  RUNNING --> AWAITING_APPROVAL: high-risk action
+  AWAITING_APPROVAL --> REJECTED: approver rejects
+  AWAITING_APPROVAL --> EXPIRED: approval is past expiry
+  AWAITING_APPROVAL --> DENIED: reauthorize fails
+  AWAITING_APPROVAL --> UNVERIFIED: tool report and reread disagree
+  AWAITING_APPROVAL --> VERIFIED: reread shows suspended
+```
+
+| Layer | What the demo runs | Adapter slot |
+| --- | --- | --- |
+| API | FastAPI, idempotency keys, token tenant | — |
+| Execution | LangGraph 1.2.16 and a SQLite checkpoint | Step Functions skeleton, account `000000000000` |
+| Model | Deterministic mock | xAI, OpenAI, Anthropic. Bedrock invoke is disabled |
+| Identity | Mock directory and in-process policy | Site identity provider. OPA is unwired |
+| Memory | SQLite for runs. PostgreSQL row-level security when `DATABASE_URL` is set | RDS and pgvector |
+| Evaluation | Golden cases, injection cases, replay, model-safety gate | ClickHouse and BigQuery are unwired |
+| Operations | In-process traces and Prometheus counters | Grafana JSON. Terraform and Kubernetes are unapplied |
+
+The longer write-up is [docs/architecture.md](docs/architecture.md). Threats, evaluation rules, crash recovery, and the NO-GO gates are in [docs/](docs/).
+
 ## How this sits with the other references
 
 | | [H100 GPU factory](https://github.com/JatinF/h100-ai-factory-reference-architecture) | [Healthcare AI factory](https://github.com/JatinF/healthcare-ai-factory-platform) | This repository |
